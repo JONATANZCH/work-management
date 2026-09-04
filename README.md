@@ -173,18 +173,17 @@ Se diseñó e implementó una **Dead Letter Queue (DLQ)** nativa para el motor d
 
 ## 6. 🌐 Publicación y Despliegue de la API
 
-* **URL Pública:** `<AQUI_TU_URL_DE_APP_RUNNER>` *(Ejemplo: https://xxxxxx.us-east-1.awsapprunner.com)*
-* **Proveedor de Hosting (Cómputo):** **AWS App Runner** (Servicio administrado de contenedores y ejecución continua para Node.js).
+* **URL Pública:** `<AQUI_TU_URL_DE_RENDER>` *(Ejemplo: https://work-management-geest.onrender.com)*
+* **Proveedor de Hosting (Cómputo):** **Render** (Web Service administrado para Node.js).
 * **Base de Datos en Producción:** **Amazon RDS (MySQL 8.0)**.
 * **Justificación de la elección:**
-  Se eligió **AWS App Runner** junto a **Amazon RDS** por las siguientes razones de ingeniería:
-  1. **Compatibilidad nativa con procesos continuos:** A diferencia de AWS Lambda (donde las ejecuciones son congeladas al finalizar cada request HTTP), App Runner mantiene un proceso Node.js persistente, garantizando que el worker asíncrono `@Cron` de notificaciones procese la tabla Outbox puntualmente cada 10 segundos.
-  2. **Seguridad y Certificados TLS:** Provee certificados SSL/TLS automáticos con cifrado HTTPS de extremo a extremo sin necesidad de configurar proxies inversos (como Nginx) ni certificados manuales.
-  3. **Escalabilidad y Aislamiento:** Arquitectura serverless administrada con reinicio automático ante fallos y conexión segura a Amazon RDS vía VPC/Security Groups.
-  4. **Costo eficiente:** Modelo de pago por uso altamente optimizado para la ventana de evaluación de 7 días.
+  Se seleccionó la arquitectura híbrida **Render + Amazon RDS** por las siguientes razones técnicas:
+  1. **Compatibilidad nativa con procesos continuos:** A diferencia de entornos serverless efímeros como AWS Lambda (que congelan la ejecución al terminar cada request HTTP), Render mantiene un proceso de servidor Node.js continuo, lo que permite que el worker asíncrono `@Cron('*/10 * * * * *')` de notificaciones procese la tabla Outbox de forma puntual y autónoma.
+  2. **Certificados SSL/TLS automáticos:** Provee cifrado HTTPS de extremo a extremo sin necesidad de configurar proxies inversos manuales (como Nginx) ni certificados Let's Encrypt.
+  3. **Base de Datos Relacional Robusta:** Se utiliza **Amazon RDS (MySQL 8.0)** en la nube con respaldo automatizado, almacenamiento SSD y aislamiento de transacciones ACID (`SELECT FOR UPDATE`), garantizando persistencia íntegra.
+  4. **Costo Cero / Free Tier:** Cumple con la restricción del reto de mantener la API disponible durante la ventana de evaluación de 7 días sin incurrir en costos.
 * **Cómo acceder a la API desplegada:**
-  Consumir los endpoints mediante cliente HTTP (Postman, Apidog, cURL) usando la URL base HTTPS provista por App Runner.
-  * *Nota de autenticación:* No se requieren API keys a menos que se configure explicitamente.
+  Consumir los endpoints mediante cliente HTTP (Postman, Apidog, cURL) usando la URL base HTTPS provista por Render.
   * *Requisito estricto:* Enviar el header `Idempotency-Key: <UUID>` en todas las peticiones `POST`.
 
 ---
