@@ -1,0 +1,47 @@
+# Compiled output
+/dist
+/build
+
+# Node dependencies
+/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Environment files (CRÍTICO: nunca subir credenciales reales)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Testing & Coverage
+/coverage
+/.nyc_output
+
+# IDE and OS files
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# AI assistants / Scratch / Agent caches
+.agents/
+.claude/
+.cursor/
+.devin/
+
+# Log files
+*.log
+
+# Docker / MySQL local volumes
+mysql_data/

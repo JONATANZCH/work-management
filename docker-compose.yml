@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # Base de datos principal para la aplicación
+  db:
+    image: mysql:8.0
+    container_name: geest_mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: geest_db
+      MYSQL_USER: geest_user
+      MYSQL_PASSWORD: geest_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 5s
+      retries: 10
+
+  # Base de datos aislada para ejecutar Tests Automatizados rápidamente
+  test-db:
+    image: mysql:8.0
+    container_name: geest_mysql_test_db
+    tmpfs:
+      - /var/lib/mysql # Guarda los datos en RAM para que los unit tests vuelen
+    environment:
+      MYSQL_ROOT_PASSWORD: test_password
+      MYSQL_DATABASE: geest_test_db
+    ports:
+      - "3307:3306"
+
+volumes:
+  mysql_data:

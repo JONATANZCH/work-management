@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus {
+  open
+  archived
+}
+
+model User {
+  id        Int              @id @default(autoincrement())
+  name      String
+  lastName  String
+  email     String           @unique
+  createdAt DateTime         @default(now())
+  tasks     TaskAssignment[]
+}
+
+model Task {
+  id              Int               @id @default(autoincrement())
+  title           String
+  description     String?
+  status          TaskStatus        @default(open)
+  createdAt       DateTime          @default(now())
+  assignments     TaskAssignment[]
+  notifications   NotificationLog[]
+  deadLetterQueue DeadLetterQueue[]
+}
+
+model TaskAssignment {
+  taskId      Int
+  userId      Int
+  isCompleted Boolean @default(false)
+  task        Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+}
+
+model NotificationLog {
+  id            Int      @id @default(autoincrement())
+  taskId        Int
+  attemptNumber Int
+  status        String
+  timestamp     DateTime @default(now())
+  task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model IdempotencyKey {
+  key          String   @id
+  responseBody String   @db.Text
+  createdAt    DateTime @default(now())
+}
+
+model DeadLetterQueue {
+  id       Int      @id @default(autoincrement())
+  taskId   Int
+  payload  String   @db.Text
+  reason   String
+  failedAt DateTime @default(now())
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}

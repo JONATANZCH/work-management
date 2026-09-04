@@ -1,0 +1,674 @@
+openapi: 3.0.0
+info:
+  title: GEEST - Sistema de Gestión de Trabajo
+  description: |
+    API REST para la gestión de tareas y usuarios del sistema GEEST.
+
+    ## Reglas transversales
+    - Todos los endpoints `POST` requieren el header `Idempotency-Key`.
+    - Toda respuesta de error (4xx / 5xx) sigue el formato estricto `{ "error": { "code": "STRING", "message": "STRING" } }`.
+    - El archivado automático de tareas se dispara cuando todos los usuarios asignados completan su trabajo.
+    - Las notificaciones webhook se procesan de forma asíncrona con hasta 3 reintentos (patrón Transactional Outbox).
+  version: 1.0.0
+  contact:
+    name: GEEST Team
+
+servers:
+  - url: http://localhost:3000
+    description: Servidor de desarrollo local
+
+tags:
+  - name: Users
+    description: Gestión de usuarios
+  - name: Tasks
+    description: Gestión de tareas
+  - name: Assignments
+    description: Asignación de usuarios a tareas
+  - name: Notifications
+    description: Historial de notificaciones webhook
+
+# ---------------------------------------------------------------------------
+# Componentes reutilizables
+# ---------------------------------------------------------------------------
+components:
+  # ---- Headers ----
+  parameters:
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Clave única de idempotencia. Si se recibe una petición duplicada con la misma
+        clave y body, el servidor retorna la respuesta original sin ejecutar la operación de nuevo.
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+
+    IdTaskPath:
+      name: idTask
+      in: path
+      required: true
+      description: ID numérico de la tarea.
+      schema:
+        type: integer
+        example: 1
+
+    IdUserPath:
+      name: idUser
+      in: path
+      required: true
+      description: ID numérico del usuario.
+      schema:
+        type: integer
+        example: 1
+
+    StatusQuery:
+      name: status
+      in: query
+      required: false
+      description: Filtra tareas por estado.
+      schema:
+        type: string
+        enum:
+          - open
+          - archived
+        example: open
+
+  # ---- Schemas ----
+  schemas:
+    # ---------- Error ----------
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Código de error legible por máquina.
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              description: Descripción legible por humano del error.
+              example: "El campo 'email' es requerido."
+
+    # ---------- User ----------
+    CreateUserRequest:
+      type: object
+      required:
+        - name
+        - lastName
+        - email
+      properties:
+        name:
+          type: string
+          example: "Juan"
+        lastName:
+          type: string
+          example: "Pérez"
+        email:
+          type: string
+          format: email
+          example: "juan.perez@example.com"
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Juan"
+        lastName:
+          type: string
+          example: "Pérez"
+        email:
+          type: string
+          format: email
+          example: "juan.perez@example.com"
+
+    UserWithPendingTasksResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Juan"
+        lastName:
+          type: string
+          example: "Pérez"
+        email:
+          type: string
+          format: email
+          example: "juan.perez@example.com"
+        pendingTasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskSummary"
+
+    TaskSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "Diseñar landing page"
+        status:
+          type: string
+          enum:
+            - open
+            - archived
+          example: "open"
+
+    # ---------- Task ----------
+    CreateTaskRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          example: "Diseñar landing page"
+        description:
+          type: string
+          nullable: true
+          example: "Crear el diseño responsive de la landing page principal."
+
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "Diseñar landing page"
+        description:
+          type: string
+          nullable: true
+          example: "Crear el diseño responsive de la landing page principal."
+        status:
+          type: string
+          enum:
+            - open
+            - archived
+          example: "open"
+
+    TaskDetailResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "Diseñar landing page"
+        description:
+          type: string
+          nullable: true
+          example: "Crear el diseño responsive de la landing page principal."
+        status:
+          type: string
+          enum:
+            - open
+            - archived
+          example: "open"
+        assignedUsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssignedUserDetail"
+
+    AssignedUserDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Juan"
+        lastName:
+          type: string
+          example: "Pérez"
+        email:
+          type: string
+          format: email
+          example: "juan.perez@example.com"
+        isCompleted:
+          type: boolean
+          example: false
+
+    # ---------- Assignment ----------
+    AssignUsersRequest:
+      type: object
+      required:
+        - userIds
+      properties:
+        userIds:
+          type: array
+          items:
+            type: integer
+          example: [1, 2, 3]
+
+    TaskAssignmentResponse:
+      type: object
+      properties:
+        taskId:
+          type: integer
+          example: 1
+        assignedUserIds:
+          type: array
+          items:
+            type: integer
+          example: [1, 2, 3]
+
+    # ---------- Complete ----------
+    CompleteTaskRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: integer
+          example: 1
+
+    CompleteTaskResponse:
+      type: object
+      properties:
+        taskId:
+          type: integer
+          example: 1
+        userId:
+          type: integer
+          example: 1
+        isCompleted:
+          type: boolean
+          example: true
+        taskStatus:
+          type: string
+          enum:
+            - open
+            - archived
+          description: Estado actual de la tarea tras la operación. Será "archived" si todos los asignados completaron.
+          example: "open"
+
+    # ---------- User Tasks ----------
+    UserTaskResponse:
+      type: object
+      properties:
+        taskId:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "Diseñar landing page"
+        status:
+          type: string
+          enum:
+            - open
+            - archived
+          example: "open"
+        isCompleted:
+          type: boolean
+          description: Indica si el usuario ha completado su parte de la tarea.
+          example: false
+
+    # ---------- Notification ----------
+    NotificationLogResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        taskId:
+          type: integer
+          example: 1
+        attemptNumber:
+          type: integer
+          description: Número de intento (1 a 3).
+          example: 1
+        status:
+          type: string
+          description: Código HTTP recibido o descripción del resultado (e.g. "200", "500", "TIMEOUT").
+          example: "200"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-04T08:30:00.000Z"
+
+    # ---------- Webhook Payload ----------
+    WebhookNotificationPayload:
+      type: object
+      description: |
+        Payload enviado al NOTIFY_URL cuando una tarea es archivada.
+        No es un endpoint expuesto, sino el cuerpo del POST saliente.
+      required:
+        - taskId
+        - title
+        - archivedAt
+      properties:
+        taskId:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "Diseñar landing page"
+        archivedAt:
+          type: string
+          format: date-time
+          example: "2026-09-04T08:30:00.000Z"
+
+  # ---- Respuestas reutilizables ----
+  responses:
+    BadRequest:
+      description: Error de validación en la solicitud.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "El campo 'email' es requerido."
+
+    NotFound:
+      description: El recurso solicitado no existe.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "NOT_FOUND"
+              message: "La tarea con id 999 no fue encontrada."
+
+    Conflict:
+      description: Conflicto de estado (e.g. tarea ya archivada, usuario ya completó).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "CONFLICT"
+              message: "La tarea ya se encuentra archivada."
+
+    InternalServerError:
+      description: Error interno del servidor.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "INTERNAL_ERROR"
+              message: "Ocurrió un error inesperado. Intente de nuevo más tarde."
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+  # ===================
+  #  USERS
+  # ===================
+  /users:
+    post:
+      tags: [Users]
+      summary: Crear un usuario
+      description: Registra un nuevo usuario en el sistema. Requiere header `Idempotency-Key`.
+      operationId: createUser
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Usuario creado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    get:
+      tags: [Users]
+      summary: Listar usuarios
+      description: Retorna todos los usuarios junto con sus tareas pendientes (no completadas y con estado `open`).
+      operationId: listUsers
+      responses:
+        "200":
+          description: Lista de usuarios con tareas pendientes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserWithPendingTasksResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ===================
+  #  USER TASKS
+  # ===================
+  /users/{idUser}/tasks:
+    get:
+      tags: [Users]
+      summary: Listar tareas de un usuario
+      description: Retorna las tareas asignadas a un usuario específico, incluyendo el estado de completitud del usuario en cada tarea.
+      operationId: listUserTasks
+      parameters:
+        - $ref: "#/components/parameters/IdUserPath"
+      responses:
+        "200":
+          description: Lista de tareas asignadas al usuario.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserTaskResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ===================
+  #  TASKS
+  # ===================
+  /tasks:
+    post:
+      tags: [Tasks]
+      summary: Crear una tarea
+      description: |
+        Crea una nueva tarea con estado por defecto `open`.
+        El campo `description` es opcional. Requiere header `Idempotency-Key`.
+      operationId: createTask
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskRequest"
+      responses:
+        "201":
+          description: Tarea creada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    get:
+      tags: [Tasks]
+      summary: Listar tareas
+      description: Retorna todas las tareas. Se puede filtrar por estado usando el query parameter `status`.
+      operationId: listTasks
+      parameters:
+        - $ref: "#/components/parameters/StatusQuery"
+      responses:
+        "200":
+          description: Lista de tareas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ===================
+  #  TASK DETAIL
+  # ===================
+  /tasks/{idTask}:
+    get:
+      tags: [Tasks]
+      summary: Obtener detalle de una tarea
+      description: Retorna el detalle completo de una tarea incluyendo los usuarios asignados y su estado de completitud.
+      operationId: getTaskDetail
+      parameters:
+        - $ref: "#/components/parameters/IdTaskPath"
+      responses:
+        "200":
+          description: Detalle de la tarea con usuarios asignados.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ===================
+  #  TASK ASSIGNMENT
+  # ===================
+  /tasks/{idTask}/assign:
+    post:
+      tags: [Assignments]
+      summary: Asignar usuarios a una tarea
+      description: |
+        Asigna uno o más usuarios a una tarea existente.
+        Las asignaciones duplicadas se ignoran silenciosamente.
+        Requiere header `Idempotency-Key`.
+      operationId: assignUsersToTask
+      parameters:
+        - $ref: "#/components/parameters/IdTaskPath"
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignUsersRequest"
+      responses:
+        "200":
+          description: Usuarios asignados exitosamente (las asignaciones duplicadas fueron ignoradas).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskAssignmentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ===================
+  #  TASK COMPLETE
+  # ===================
+  /tasks/{idTask}/complete:
+    post:
+      tags: [Tasks]
+      summary: Marcar tarea como completada por un usuario
+      description: |
+        Marca la asignación del usuario como completada.
+
+        **Archivado automático:** Si tras esta operación todos los usuarios asignados han completado,
+        la tarea pasa a estado `archived` y se registra la intención de notificación webhook
+        en la misma transacción de base de datos (patrón Transactional Outbox).
+
+        **Concurrencia:** Se utilizan bloqueos transaccionales (`SELECT FOR UPDATE`) para
+        garantizar que el archivado ocurra exactamente una vez incluso bajo peticiones concurrentes.
+
+        Requiere header `Idempotency-Key`.
+      operationId: completeTask
+      parameters:
+        - $ref: "#/components/parameters/IdTaskPath"
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteTaskRequest"
+      responses:
+        "200":
+          description: Tarea marcada como completada por el usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompleteTaskResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ===================
+  #  NOTIFICATIONS
+  # ===================
+  /tasks/{idTask}/notifications:
+    get:
+      tags: [Notifications]
+      summary: Historial de notificaciones webhook
+      description: |
+        Retorna el historial de intentos de envío del webhook de notificación para una tarea archivada.
+        Cada registro incluye el número de intento (máximo 3), timestamp y código de estado HTTP recibido.
+      operationId: getTaskNotifications
+      parameters:
+        - $ref: "#/components/parameters/IdTaskPath"
+      responses:
+        "200":
+          description: Lista de intentos de notificación.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationLogResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
