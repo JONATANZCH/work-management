@@ -173,13 +173,19 @@ Se diseñó e implementó una **Dead Letter Queue (DLQ)** nativa para el motor d
 
 ## 6. 🌐 Publicación y Despliegue de la API
 
-* **URL Pública:** `<AQUI_TU_URL_PUBLICA>` *(Ejemplo: https://api.tudominio.com o URL de Render/Railway)*
-* **Proveedor de Hosting:** *(Ejemplo: Render / Railway / AWS / Fly.io)*
-* **Base de Datos en Producción:** *(Ejemplo: Aiven MySQL / Supabase / Railway MySQL)*
+* **URL Pública:** `<AQUI_TU_URL_DE_APP_RUNNER>` *(Ejemplo: https://xxxxxx.us-east-1.awsapprunner.com)*
+* **Proveedor de Hosting (Cómputo):** **AWS App Runner** (Servicio administrado de contenedores y ejecución continua para Node.js).
+* **Base de Datos en Producción:** **Amazon RDS (MySQL 8.0)**.
 * **Justificación de la elección:**
-  Se optó por este proveedor por su soporte nativo para contenedores Node.js/Docker, provisión de certificados TLS/HTTPS automáticos, alta disponibilidad dentro de la ventana de evaluación de 7 días y costos optimizados bajo nivel gratuito (Free Tier).
-* **Cómo acceder:**
-  Consumir mediante cliente HTTP (Postman, Apidog, cURL) apuntando a la URL base. Recuerda enviar el header `Idempotency-Key: <UUID>` en todas las peticiones `POST`.
+  Se eligió **AWS App Runner** junto a **Amazon RDS** por las siguientes razones de ingeniería:
+  1. **Compatibilidad nativa con procesos continuos:** A diferencia de AWS Lambda (donde las ejecuciones son congeladas al finalizar cada request HTTP), App Runner mantiene un proceso Node.js persistente, garantizando que el worker asíncrono `@Cron` de notificaciones procese la tabla Outbox puntualmente cada 10 segundos.
+  2. **Seguridad y Certificados TLS:** Provee certificados SSL/TLS automáticos con cifrado HTTPS de extremo a extremo sin necesidad de configurar proxies inversos (como Nginx) ni certificados manuales.
+  3. **Escalabilidad y Aislamiento:** Arquitectura serverless administrada con reinicio automático ante fallos y conexión segura a Amazon RDS vía VPC/Security Groups.
+  4. **Costo eficiente:** Modelo de pago por uso altamente optimizado para la ventana de evaluación de 7 días.
+* **Cómo acceder a la API desplegada:**
+  Consumir los endpoints mediante cliente HTTP (Postman, Apidog, cURL) usando la URL base HTTPS provista por App Runner.
+  * *Nota de autenticación:* No se requieren API keys a menos que se configure explicitamente.
+  * *Requisito estricto:* Enviar el header `Idempotency-Key: <UUID>` en todas las peticiones `POST`.
 
 ---
 
