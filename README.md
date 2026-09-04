@@ -173,8 +173,9 @@ Se diseñó e implementó una **Dead Letter Queue (DLQ)** nativa para el motor d
 
 ## 6. 🌐 Publicación y Despliegue de la API
 
-* **URL Pública:** `<AQUI_TU_URL_DE_ELASTIC_BEANSTALK>` *(Ejemplo: http://work-management-geest.us-east-1.elasticbeanstalk.com)*
-* **Proveedor de Hosting (Cómputo):** **AWS Elastic Beanstalk** (Entorno administrado Node.js sobre Amazon Linux).
+* **URL Pública:** `https://work-management-jxlw.onrender.com
+` *(Ejemplo: http://work-management-geest.us-east-1.elasticbeanstalk.com)*
+* **Proveedor de Hosting (Cómputo):** **render**.
 * **Base de Datos en Producción:** **Amazon RDS (MySQL 8.0)**.
 * **Justificación de la elección:**
   Se seleccionó la arquitectura completa en la nube de AWS con **Elastic Beanstalk + Amazon RDS** por las siguientes razones de ingeniería:
