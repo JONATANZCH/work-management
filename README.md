@@ -173,17 +173,18 @@ Se diseñó e implementó una **Dead Letter Queue (DLQ)** nativa para el motor d
 
 ## 6. 🌐 Publicación y Despliegue de la API
 
-* **URL Pública:** `<AQUI_TU_URL_DE_RENDER>` *(Ejemplo: https://work-management-geest.onrender.com)*
-* **Proveedor de Hosting (Cómputo):** **Render** (Web Service administrado para Node.js).
+* **URL Pública:** `<AQUI_TU_URL_DE_ELASTIC_BEANSTALK>` *(Ejemplo: http://work-management-geest.us-east-1.elasticbeanstalk.com)*
+* **Proveedor de Hosting (Cómputo):** **AWS Elastic Beanstalk** (Entorno administrado Node.js sobre Amazon Linux).
 * **Base de Datos en Producción:** **Amazon RDS (MySQL 8.0)**.
 * **Justificación de la elección:**
-  Se seleccionó la arquitectura híbrida **Render + Amazon RDS** por las siguientes razones técnicas:
-  1. **Compatibilidad nativa con procesos continuos:** A diferencia de entornos serverless efímeros como AWS Lambda (que congelan la ejecución al terminar cada request HTTP), Render mantiene un proceso de servidor Node.js continuo, lo que permite que el worker asíncrono `@Cron('*/10 * * * * *')` de notificaciones procese la tabla Outbox de forma puntual y autónoma.
-  2. **Certificados SSL/TLS automáticos:** Provee cifrado HTTPS de extremo a extremo sin necesidad de configurar proxies inversos manuales (como Nginx) ni certificados Let's Encrypt.
-  3. **Base de Datos Relacional Robusta:** Se utiliza **Amazon RDS (MySQL 8.0)** en la nube con respaldo automatizado, almacenamiento SSD y aislamiento de transacciones ACID (`SELECT FOR UPDATE`), garantizando persistencia íntegra.
-  4. **Costo Cero / Free Tier:** Cumple con la restricción del reto de mantener la API disponible durante la ventana de evaluación de 7 días sin incurrir en costos.
+  Se seleccionó la arquitectura completa en la nube de AWS con **Elastic Beanstalk + Amazon RDS** por las siguientes razones de ingeniería:
+  1. **Ecosistema Nativo AWS:** Tanto la capa de cómputo como la base de datos conviven en la misma región (`us-east-1`), minimizando la latencia de red en las transacciones de base de datos.
+  2. **Compatibilidad nativa con procesos continuos:** A diferencia de arquitecturas serverless efímeras como AWS Lambda (donde los procesos se congelan al terminar la solicitud HTTP), Elastic Beanstalk ejecuta la aplicación como un servicio continuo Node.js, garantizando que el worker asíncrono `@Cron('*/10 * * * * *')` procese la tabla Outbox puntualmente cada 10 segundos.
+  3. **Base de Datos Relacional Robusta:** **Amazon RDS (MySQL 8.0)** con almacenamiento persistente, transacciones ACID estrictas y aislamiento de concurrencia mediante `SELECT FOR UPDATE`.
+  4. **Gestión de Salud y Recuperación:** Elastic Beanstalk monitoriza la salud de la instancia, reiniciando el servicio automáticamente si ocurre algún fallo no controlado.
+  5. **Costo Cero / Free Tier:** Elegible dentro de la capa gratuita de AWS (instancia `t3.micro` o `t4g.micro` + RDS `db.t4g.micro` Free Tier) para cumplir el requerimiento de disponibilidad durante los 7 días de evaluación.
 * **Cómo acceder a la API desplegada:**
-  Consumir los endpoints mediante cliente HTTP (Postman, Apidog, cURL) usando la URL base HTTPS provista por Render.
+  Consumir los endpoints mediante cliente HTTP (Postman, Apidog, cURL) usando la URL base provista por Elastic Beanstalk.
   * *Requisito estricto:* Enviar el header `Idempotency-Key: <UUID>` en todas las peticiones `POST`.
 
 ---
